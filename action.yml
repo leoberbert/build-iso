@@ -1,0 +1,386 @@
+# -*- coding: utf-8 -*-
+#
+#  action.yml
+
+name: "Build ISO"
+description: "Builds a Custom ISO image for BigCommunity/BigLinux"
+
+inputs:
+  distroname:
+    type: choice
+    description: "Distribution name for the ISO"
+    required: true
+    options:
+      - bigcommunity
+      - biglinux
+    default: "bigcommunity"
+  
+  iso_profiles_repo:
+    type: choice
+    description: "ISO profiles repository"
+    required: true
+    options:
+      - "https://github.com/big-comm/iso-profiles"
+      - "https://github.com/biglinux/iso-profiles"
+      - "https://github.com/talesam/iso-profiles"
+    default: "https://github.com/big-comm/iso-profiles"
+  
+  iso_profiles_branch:
+    description: "Branch of the ISO profiles repository (optional)"
+    required: false
+  
+  edition:
+    description: "Name of the ISO profile to build"
+    required: true
+  
+  community_branch:
+    description: "Community branch (stable, testing)"
+    required: false
+  
+  biglinux_branch:
+    description: "BigLinux branch (stable, testing)"
+    required: true
+  
+  manjaro_branch:
+    description: "Manjaro branch (stable, testing, unstable)"
+    required: false
+    default: "stable"
+  
+  scope:
+    description: "Build scope (full or minimal)"
+    required: false
+    default: "full"
+  
+  kernel:
+    description: "Kernel version (latest, lts, oldLts, xanmod)"
+    required: true
+  
+  release_tag:
+    description: "Release tag for the ISO"
+    required: true
+  
+  tmate:
+    description: "Enable debugging with tmate"
+    required: false
+    default: false
+  
+  office-chooser:
+    description: "Include office suite"
+    required: false
+    default: "false"
+  
+  telegram_token:
+    description: "Token for Telegram notifications"
+    required: false
+  
+  telegram_chat_id:
+    description: "Chat ID for Telegram notifications"
+    required: false
+  
+  github_token:
+    description: "GitHub token for authentication"
+    required: true
+  
+  start_time:
+    description: "Workflow start time"
+    required: false
+  
+  start_timestamp:
+    description: "Workflow start timestamp"
+    required: false
+
+outputs:
+  iso_path:
+    description: "Path to the generated ISO file"
+    value: ${{ steps.build.outputs.iso_path }}
+  
+  release_name:
+    description: "Name of the release"
+    value: ${{ steps.prepare-iso.outputs.release_name }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Define send_telegram_message function in temporary script
+      shell: bash
+      env:
+        TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
+        TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
+      run: |
+        # Define send_telegram_message function in temporary script
+        cat << 'EOF' > /tmp/send_telegram_message.sh
+        export TERM=${TERM:-xterm}
+        export TERM=${TERM:-xterm-256color}
+
+        # Color definitions for status messages
+        blueDark="\e[1;38;5;33m"     # Bold dark blue
+        mediumBlue="\e[1;38;5;32m"   # Bold medium blue
+        lightBlue="\e[1;38;5;39m"    # Bold light blue
+        cyan="\e[1;38;5;45m"         # Bold cyan
+        white="\e[1;97m"             # Bold white
+        reset="\e[0m"                # Reset text formatting
+
+        # Additional colors for warnings/errors
+        red="\e[1;31m"               # Bold red for errors
+        yellow="\e[1;33m"            # Bold yellow for warnings
+        green="\e[1;32m"             # Bold green for success
+        
+        alias ls='ls -lha --color=auto'
+        alias dir='ls -lha --color=auto'
+
+        die() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${red}error: ${white}${msg}${reset}"
+          exit 1
+        }
+        export -f die
+
+        msg_raw() {
+          local msg="$1"
+          # Remove HTML tags if they exist
+          #msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+
+          # Check if message contains ':'
+          if [[ "$msg" == *:* ]]; then
+            # Split string before and after first ':'
+            local before_colon="${msg%%:*}:"
+            local after_colon="${msg#*: }"
+            # Apply colors
+            msg="${mediumBlue}${before_colon} ${white}${after_colon}${reset}"
+          else
+            # If no ':', apply default color
+            msg="${mediumBlue}${msg}${reset}"
+          fi
+          echo -e "$msg"
+        }
+        export -f msg_raw
+
+        msg() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${blueDark}[${lightBlue}RUNNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+        }
+        export -f msg
+
+        msg_ok() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${blueDark}[${green}SUCCESS${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+        }
+        export -f msg_ok
+
+        msg_run() {
+          local msg="$1"
+          echo -e "BP=>${blueDark}[${lightBlue}COMMAND${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+          eval "$msg"
+        }
+        export -f msg_run
+
+        msg_info() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${blueDark}[${cyan}INFO${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+        }
+        export -f msg_info
+
+        msg_warning() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${blueDark}[${yellow}WARNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+        }
+        export -f msg_warning
+
+        replicate() {
+          local char=${1:-'#'}
+          local nsize=${2:-$(tput cols)}
+          local line
+          printf -v line "%*s" "$nsize" && echo -e "${blueDark}${line// /$char}${reset}"
+        }
+        export -f replicate
+
+        send_telegram_message() {
+          local message="$1"
+          local parse_mode="$2"
+
+          # Set parse_mode as "HTML" if not specified
+          [[ -z $parse_mode ]] && parse_mode="HTML"
+
+          # Remove HTML tags and display result in terminal
+          echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          
+          # Send original message with HTML to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+            -d chat_id="${{ inputs.telegram_chat_id }}" \
+            -d text="$message" \
+            -d parse_mode="$parse_mode"
+        }
+        export -f send_telegram_message
+        EOF
+
+    - name: Display system information
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        replicate '='
+        msg_info "Current host: $(hostname)"
+        msg_info "Current user: $(whoami) [$(id -u)]"
+        msg_info "User details: $(id)"
+        replicate '='
+        msg_run "df -hT || true"
+        replicate '='
+        msg_run "ls -la /mnt || true"
+        replicate '='
+
+    - name: Setup build environment
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        
+        # Setup build environment
+        msg "Setting up build packages"
+        
+        # Add community repository if needed
+        if [[ "${{ inputs.distroname }}" == 'bigcommunity' ]]; then
+          msg_info "Adding community-extra repository"
+          {
+            echo "[community-extra]"
+            echo "SigLevel = PackageRequired"
+            echo "Server = https://repo.communitybig.org/extra/\$arch"
+            echo
+          } | sudo tee -a /etc/pacman.conf > /dev/null
+        fi
+
+        # Install required packages
+        msg_info "Installing required packages"
+        sudo pacman -Sy --quiet --needed --noconfirm --overwrite \* \
+          manjaro-chrootbuild \
+          manjaro-tools-iso-git \
+          manjaro-tools-yaml-git \
+          manjaro-tools-base-git \
+          mktorrent \
+          squashfs-tools \
+          archiso \
+          calamares \
+          calamares-tools \
+          mkinitcpio \
+          shfmt \
+          cdrkit \
+          ncurses > /dev/null
+          
+        # Configure disable-fsync for faster builds
+        msg "Configuring disable-fsync"
+        DISABLE_FSYNC_URL="https://raw.githubusercontent.com/biglinux/disable-fsync/main/disable-fsync/usr/lib/disable-fsync.so"
+        DISABLE_FSYNC_FILE="/usr/lib/disable-fsync.so"
+        PRELOAD_FILE="/etc/ld.so.preload"
+        
+        sudo wget "$DISABLE_FSYNC_URL" -O "$DISABLE_FSYNC_FILE"
+        SHA256SUM=$(curl -s "$DISABLE_FSYNC_URL" | sha256sum | awk '{print $1}')
+        echo "${SHA256SUM} ${DISABLE_FSYNC_FILE}" | sha256sum --check || exit 1
+        sudo sh -c "echo '${DISABLE_FSYNC_FILE}' >> '${PRELOAD_FILE}'"
+        sudo ldconfig
+        
+        # Setup cryptographic keys
+        msg "Setting up cryptographic keys"
+        git clone https://github.com/biglinux/biglinux-key.git
+        sudo install -dm755 /etc/pacman.d/gnupg/
+        sudo install -m0644 biglinux-key/usr/share/pacman/keyrings/* /etc/pacman.d/gnupg/
+        sudo rm -r biglinux-key
+        
+        if [[ "${{ inputs.distroname }}" == 'bigcommunity' ]]; then
+          git clone https://github.com/big-comm/community-keyring.git
+          sudo install -m0644 community-keyring/community.gpg /usr/share/pacman/keyrings/
+          sudo install -m0644 community-keyring/community-trusted /usr/share/pacman/keyrings/
+          sudo install -m0644 community-keyring/community-revoked /usr/share/pacman/keyrings/
+          sudo rm -r community-keyring
+        fi
+        
+        # Initialize keys
+        sudo pacman-key --init
+        sudo pacman-key --populate
+        sudo pacman -Sy --quiet --noconfirm
+        
+        # Adjust mkinitcpio hooks
+        msg "Adjusting mkinitcpio hooks"
+        sudo sed -i -e 's/File/Path/' /usr/share/libalpm/hooks/*hook*
+        
+        # Create device node
+        msg "Creating device node /dev/sr0"
+        sudo mknod /dev/sr0 b 11 0 || true
+        sudo chmod 660 /dev/sr0 || true
+        sudo chown root:root /dev/sr0 || true
+
+    - name: Setup tmate session for debugging
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ github.event.client_payload.tmate == true || inputs.tmate == true}}
+      with:
+        install-dependencies: false
+        detached: true
+
+    - name: Set environment variables
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        msg "Setting environment variables"
+        
+        # Determine distroname for ISO profiles
+        DISTRONAME_ISOPROFILES="${{ inputs.distroname }}"
+        
+        # Write environment variables
+        {
+          echo "USERNAME=builduser"
+          echo "HOME_FOLDER=/home/builduser"
+          echo "ISO_PROFILES_REPO=${{ inputs.iso_profiles_repo }}"
+          echo "EDITION=${{ inputs.edition }}"
+          echo "WORK_PATH=/__w/build-iso/build-iso"
+          echo "WORK_PATH_ISO_PROFILES=/__w/build-iso/build-iso/iso-profiles"
+          echo "DISTRONAME=${{ inputs.distroname }}"
+          echo "DISTRONAME_ISOPROFILES=$DISTRONAME_ISOPROFILES"
+          echo "PROFILE_PATH=/__w/build-iso/build-iso/iso-profiles/${DISTRONAME_ISOPROFILES}"
+          echo "PROFILE_PATH_EDITION=/__w/build-iso/build-iso/iso-profiles/${DISTRONAME_ISOPROFILES}/${{ inputs.edition }}"
+          echo "PATH_MANJARO_ISO_PROFILES=/usr/share/manjaro-tools/iso-profiles"
+          echo "PATH_MANJARO_TOOLS=/usr/share/manjaro-tools"
+          echo "VAR_CACHE_MANJARO_TOOLS=/var/cache/manjaro-tools"
+          echo "VAR_CACHE_MANJARO_TOOLS_ISO=/var/cache/manjaro-tools/iso"
+          echo "DEBUG=${{ inputs.tmate }}"
+          echo "MANJARO_BRANCH=${{ inputs.manjaro_branch }}"
+          echo "BIGCOMMUNITY_BRANCH=${{ inputs.community_branch }}"
+          echo "BIGLINUX_BRANCH=${{ inputs.biglinux_branch }}"
+          echo "KERNEL=${{ inputs.kernel }}"
+          echo "RELEASE_TAG=${{ inputs.release_tag }}"
+          echo "SCOPE=${{ inputs.scope }}"
+          echo "OFFICE=${{ inputs.office-chooser }}"
+        } >> "$GITHUB_ENV"
+
+    - name: Build ISO
+      id: build
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        msg "Starting ISO build process"
+        
+        # Create build-iso.sh script
+        cat > $WORK_PATH/build-iso.sh << 'EOF'
+        #!/usr/bin/env bash
+        # This file will be replaced with the contents of the build-iso.sh artifact
+        EOF
+        
+        chmod +x $WORK_PATH/build-iso.sh
+        
+        # Execute build script with automatic mode
+        $WORK_PATH/build-iso.sh --automatic
+        
+        # Check exit code
+        if [ $? -ne 0 ]; then
+          die "ISO build failed"
+        fi
+        
+        msg_ok "ISO build completed successfully"
+
+    - name: Set ISO path for output
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        msg "Setting ISO path for output"
+        echo "ISO_PATH=$WORK_PATH/$ISO_BASENAME" >> $GITHUB_ENV
+        msg_ok "ISO path set to: $WORK_PATH/$ISO_BASENAME"
