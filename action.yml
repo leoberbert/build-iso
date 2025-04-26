@@ -359,16 +359,9 @@ runs:
         source /tmp/send_telegram_message.sh
         msg "Starting ISO build process"
         
-        # Create build-iso.sh script
-        cat > $WORK_PATH/build-iso.sh << 'EOF'
-        #!/usr/bin/env bash
-        # This file will be replaced with the contents of the build-iso.sh artifact
-        EOF
-        
-        chmod +x $WORK_PATH/build-iso.sh
-        
-        # Execute build script with automatic mode
-        $WORK_PATH/build-iso.sh --automatic
+        # Execute the existing build-iso.sh script directly
+        chmod +x ./build-iso.sh
+        ./build-iso.sh --automatic
         
         # Check exit code
         if [ $? -ne 0 ]; then
