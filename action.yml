@@ -370,6 +370,13 @@ runs:
         
         msg_ok "ISO build completed successfully"
 
+    - name: Setup tmate session for debugging
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ github.event.client_payload.tmate == true || inputs.tmate == true}}
+      with:
+        install-dependencies: false
+        detached: true
+
     - name: Set ISO path for output
       shell: bash
       run: |
