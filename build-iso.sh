@@ -227,7 +227,12 @@ EOF
 setup_manjaro_tools() {
   msg "Setting up Manjaro tools"
 
-  
+  # Configure ISO profiles location
+  msg_info "Configuring ISO profiles location"
+  mkdir -p "$HOME_FOLDER/.config/manjaro-tools"
+  echo "run_dir=$WORK_PATH_ISO_PROFILES" > "$HOME_FOLDER/.config/manjaro-tools/iso-profiles.conf"
+  chmod 644 "$HOME_FOLDER/.config/manjaro-tools/iso-profiles.conf"
+  msg_info "ISO profiles configuration: $(cat "$HOME_FOLDER/.config/manjaro-tools/iso-profiles.conf")"
   
   # Clean profiles to prevent duplication
   msg_info "Removing custom profiles directory"
