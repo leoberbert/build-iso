@@ -227,13 +227,73 @@ EOF
 setup_manjaro_tools() {
   msg "Setting up Manjaro tools"
 
-  # Post-setup diagnostics
-  echo "DIAGNOSTIC: Checking if manjaro-tools files exist after setup"
+  # Diagnostic and fix for manjaro-tools
+  echo "DIAGNOSTIC: Checking manjaro-tools installation"
+  echo "DIAGNOSTIC: Where is buildiso located:"
+  which buildiso
+
+  # Create directories if they don't exist
+  sudo mkdir -p /usr/lib/manjaro-tools
+  sudo mkdir -p /usr/share/manjaro-tools
+
+  # Find the actual location of files
+  UTIL_SH=$(find / -name "util.sh" | grep -i manjaro 2>/dev/null | head -n1)
+  UTIL_ISO=$(find / -name "util-iso.sh" | grep -i manjaro 2>/dev/null | head -n1)
+  UTIL_BOOT=$(find / -name "util-iso-boot.sh" | grep -i manjaro 2>/dev/null | head -n1)
+  UTIL_IMAGE=$(find / -name "util-iso-image.sh" | grep -i manjaro 2>/dev/null | head -n1)
+
+  echo "DIAGNOSTIC: Found files:"
+  echo "util.sh: $UTIL_SH"
+  echo "util-iso.sh: $UTIL_ISO"
+  echo "util-iso-boot.sh: $UTIL_BOOT"
+  echo "util-iso-image.sh: $UTIL_IMAGE"
+
+  # Install basic files if they don't exist
+  if [[ -z "$UTIL_SH" || -z "$UTIL_ISO" || -z "$UTIL_BOOT" || -z "$UTIL_IMAGE" ]]; then
+      echo "DIAGNOSTIC: Missing files, reinstalling package"
+      sudo pacman -Syy --noconfirm
+      sudo pacman -S --noconfirm manjaro-tools-iso-git
+      
+      # Check again after reinstall
+      UTIL_SH=$(find / -name "util.sh" | grep -i manjaro 2>/dev/null | head -n1)
+      UTIL_ISO=$(find / -name "util-iso.sh" | grep -i manjaro 2>/dev/null | head -n1)
+      UTIL_BOOT=$(find / -name "util-iso-boot.sh" | grep -i manjaro 2>/dev/null | head -n1)
+      UTIL_IMAGE=$(find / -name "util-iso-image.sh" | grep -i manjaro 2>/dev/null | head -n1)
+      
+      echo "DIAGNOSTIC: Files after reinstall:"
+      echo "util.sh: $UTIL_SH"
+      echo "util-iso.sh: $UTIL_ISO"
+      echo "util-iso-boot.sh: $UTIL_BOOT"
+      echo "util-iso-image.sh: $UTIL_IMAGE"
+  fi
+
+  # Create symlinks in expected locations if files exist elsewhere
+  if [[ -n "$UTIL_SH" && "$UTIL_SH" != "/usr/lib/manjaro-tools/util.sh" ]]; then
+      echo "DIAGNOSTIC: Creating symlink for util.sh"
+      sudo ln -sf "$UTIL_SH" /usr/lib/manjaro-tools/util.sh
+  fi
+
+  if [[ -n "$UTIL_ISO" && "$UTIL_ISO" != "/usr/lib/manjaro-tools/util-iso.sh" ]]; then
+      echo "DIAGNOSTIC: Creating symlink for util-iso.sh"
+      sudo ln -sf "$UTIL_ISO" /usr/lib/manjaro-tools/util-iso.sh
+  fi
+
+  if [[ -n "$UTIL_BOOT" && "$UTIL_BOOT" != "/usr/lib/manjaro-tools/util-iso-boot.sh" ]]; then
+      echo "DIAGNOSTIC: Creating symlink for util-iso-boot.sh"
+      sudo ln -sf "$UTIL_BOOT" /usr/lib/manjaro-tools/util-iso-boot.sh
+  fi
+
+  if [[ -n "$UTIL_IMAGE" && "$UTIL_IMAGE" != "/usr/lib/manjaro-tools/util-iso-image.sh" ]]; then
+      echo "DIAGNOSTIC: Creating symlink for util-iso-image.sh"
+      sudo ln -sf "$UTIL_IMAGE" /usr/lib/manjaro-tools/util-iso-image.sh
+  fi
+
+  # Check if the files are now in the expected locations
+  echo "DIAGNOSTIC: Checking expected locations after symlinks:"
   ls -la /usr/lib/manjaro-tools/util.sh 2>/dev/null || echo "util.sh still not found"
   ls -la /usr/lib/manjaro-tools/util-iso.sh 2>/dev/null || echo "util-iso.sh still not found"
   ls -la /usr/lib/manjaro-tools/util-iso-boot.sh 2>/dev/null || echo "util-iso-boot.sh still not found"
-  echo "DIAGNOSTIC: Full path of buildiso:"
-  which buildiso 2>/dev/null || echo "buildiso not in PATH"
+  ls -la /usr/lib/manjaro-tools/util-iso-image.sh 2>/dev/null || echo "util-iso-image.sh still not found"
   
   # Clean profiles to prevent duplication
   msg_info "Removing custom profiles directory"
