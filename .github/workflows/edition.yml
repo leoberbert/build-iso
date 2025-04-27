@@ -26,7 +26,6 @@ on:
         options:
           - "https://github.com/big-comm/iso-profiles"
           - "https://github.com/biglinux/iso-profiles"
-          - "https://github.com/talesam/iso-profiles"
         default: "https://github.com/big-comm/iso-profiles"
       scope:
         type: choice
@@ -91,7 +90,6 @@ env:
   CHAT_ID: "${{ secrets.CHAT_ID }}"
   started_by_user: "${{ github.actor }}"
   triggered_by_user: "${{ github.triggering_actor }}"
-  repo_path: "${{ secrets.PKGBUILD_DIR }}"
   iso_distroname: "${{ github.event.client_payload.distroname || inputs.distroname || 'bigcommunity' }}"
   iso_manjaro_branch: "${{ github.event.client_payload.manjaro_branch || inputs.manjaro_branch}}"
   iso_biglinux_branch: "${{ github.event.client_payload.biglinux_branch || inputs.biglinux_branch}}"
@@ -180,6 +178,7 @@ jobs:
         shell: bash
         run: |
           # Load variables from shared file
+          cat shared_file.txt
           source shared_file.txt
           echo "START_TIME=$START_TIME" >> $GITHUB_ENV
           echo "START_TIMESTAMP=$START_TIMESTAMP" >> $GITHUB_ENV

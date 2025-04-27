@@ -226,6 +226,14 @@ EOF
 # Setup Manjaro tools
 setup_manjaro_tools() {
   msg "Setting up Manjaro tools"
+
+  # Post-setup diagnostics
+  echo "DIAGNOSTIC: Checking if manjaro-tools files exist after setup"
+  ls -la /usr/lib/manjaro-tools/util.sh 2>/dev/null || echo "util.sh still not found"
+  ls -la /usr/lib/manjaro-tools/util-iso.sh 2>/dev/null || echo "util-iso.sh still not found"
+  ls -la /usr/lib/manjaro-tools/util-iso-boot.sh 2>/dev/null || echo "util-iso-boot.sh still not found"
+  echo "DIAGNOSTIC: Full path of buildiso:"
+  which buildiso 2>/dev/null || echo "buildiso not in PATH"
   
   # Clean profiles to prevent duplication
   msg_info "Removing custom profiles directory"
