@@ -143,7 +143,6 @@ jobs:
           <b>BigLinux Branch:</b> <code>${iso_biglinux_branch}</code>
           <b>BigCommunity Branch:</b> <code>${iso_bigcommunity_branch}</code>
           <b>Kernel:</b> <code>${iso_kernel}</code>
-          <b>ISO Name:</b> <code>${iso_distroname}_${ISO_BRANCH^^}_${iso_edition}_$(date '+%Y-%m-%d')</code>"
 
           # Send original message with HTML to Telegram
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
@@ -353,8 +352,11 @@ jobs:
           minutes=$(((duration % 3600) / 60))
           seconds=$((duration % 60))
           
-          # Format ISO size
-          iso_size=$(numfmt --to=iec --suffix=B "${artifact_size_in_bytes}")
+          # Format ISO size with decimal precision
+          iso_size=$(numfmt --to=iec --format="%.1f" --suffix=B "${artifact_size_in_bytes}")
+          
+          # Create release URL
+          release_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
           
           # Send completion notification
           message="✅ <b>[step 3/3] Job completed in:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
@@ -364,7 +366,7 @@ jobs:
           <b>End time:</b> <code>${END_TIME}</code>
           <b>ISO Name:</b> <code>${ISO_PATH##*/}</code>
           <b>ISO Size:</b> <code>${iso_size}</code>
-          <b>Download:</b> <a href='${{ env.artifact_url }}'>${FILE_NAME}.zip</a>"
+          <b>Download:</b> <a href='${release_url}'>Release ${RELEASE_TAG}</a>"
 
           send_telegram_message "${message}"
 
