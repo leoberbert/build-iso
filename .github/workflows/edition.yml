@@ -164,12 +164,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          # Install dependencies
-          sudo pacman -Sy p7zip inetutils tree --needed --quiet --noconfirm >/dev/null
-
       - name: Set release tag
         id: date
         run: |
@@ -204,38 +198,6 @@ jobs:
           iso_profiles_repo: ${{ github.event.client_payload.iso_profiles_repo || inputs.iso_profiles_repo }}
           start_time: "${{ env.START_TIME }}"
           start_timestamp: "${{ env.START_TIMESTAMP }}"
-
-      - name: Set ISO path
-        shell: bash
-        run: |
-          echo "ISO_PATH=${{ steps.build.outputs.iso_path }}" >> $GITHUB_ENV
-
-      - name: Calculate ISO MD5 hash
-        shell: bash
-        run: |
-          if [[ -f "${ISO_PATH}" ]]; then
-            md5sum "${ISO_PATH}" > "${ISO_PATH}.md5"
-            echo "MD5 hash calculated and saved:"
-            cat "${ISO_PATH}.md5"
-          else
-            echo "Error: ISO file not found at ${ISO_PATH}"
-            exit 1
-          fi
-
-      - name: Prepare ISO for release
-        id: prepare-iso
-        shell: bash
-        run: |
-          # Compress ISO into parts
-          release=$(basename "${ISO_PATH}" .iso)
-          7z a -v2000m ${release}.7z "${ISO_PATH}"
-          echo "release_name=${release}" >> "$GITHUB_OUTPUT"
-          
-          # Debug output
-          echo "ISO_PATH (original): ${ISO_PATH}"
-          echo "ISO_PATH (md5): ${ISO_PATH}.md5"
-          echo "ISO_PATH (pkgs): ${ISO_PATH}.pkgs"
-          echo "Release name: ${release}"
 
       - name: Upload ISO as artifact
         uses: actions/upload-artifact@v4
@@ -284,6 +246,13 @@ jobs:
 
       - name: Send completion notification
         shell: bash
+        env:
+          GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+          GITHUB_REPOSITORY: "${{ github.repository }}"
+          GITHUB_RUN_ID: "${{ github.run_id }}"
+          DISTRONAME: "${{ github.event.client_payload.distroname || inputs.distroname }}"
+          EDITION: "${{ github.event.client_payload.edition || inputs.edition }}"
+          KERNEL: "${{ github.event.client_payload.kernel || inputs.kernel }}"
         run: |
           # Calculate duration
           END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
@@ -293,12 +262,50 @@ jobs:
           minutes=$(((duration % 3600) / 60))
           seconds=$((duration % 60))
           
+          # Format values
+          hours=$(printf "%02d" $hours)
+          minutes=$(printf "%02d" $minutes)
+          seconds=$(printf "%02d" $seconds)
+          duration_formatted="${hours}h ${minutes}m ${seconds}s"
+          
           # Format ISO size
-          iso_size=$(numfmt --to=iec --suffix=B "${artifact_size_in_bytes}")
+          if [ -n "${artifact_size_in_bytes}" ]; then
+            iso_size=$(numfmt --to=iec --suffix=B "${artifact_size_in_bytes}")
+          elif [ -f "${ISO_PATH}" ]; then
+            iso_size=$(du -h "${ISO_PATH}" | cut -f1)
+          else
+            iso_size="unknown"
+          fi
           
           # Save variables for other steps
-          echo "duration_formatted=${hours}h ${minutes}m ${seconds}s" >> $GITHUB_ENV
+          echo "duration_formatted=${duration_formatted}" >> $GITHUB_ENV
           echo "iso_size=${iso_size}" >> $GITHUB_ENV
+          
+          # Build download link part if available
+          download_link=""
+          if [ -n "$artifact_url" ] && [ -n "$FILE_NAME" ]; then
+            download_link="<b>Download:</b> <a href='${artifact_url}'>${FILE_NAME}.zip</a>"
+          fi
+          
+          # Build and send the message
+          link_action="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          
+          MESSAGE="✅ <b>[step 3/3] Job completed in:</b> <code>${duration_formatted}</code>
+          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Workflow:</b> <code>build-iso/action.yml</code>
+          <b>End time:</b> <code>${END_TIME}</code>
+          <b>ISO Name:</b> <code>$(basename "${ISO_PATH}" .iso)</code>
+          <b>ISO Size:</b> <code>${iso_size}</code>
+          <b>Distribution:</b> <code>${DISTRONAME}</code>
+          <b>Edition:</b> <code>${EDITION}</code>
+          <b>Kernel:</b> <code>${KERNEL}</code>
+          <b>Job URL:</b> <a href='${link_action}'>${link_action}</a>
+          ${download_link}"
+          
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="HTML"
 
       - name: Telegram alert on failure
         if: failure()

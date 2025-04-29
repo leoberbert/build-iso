@@ -239,6 +239,13 @@ runs:
         GITHUB_REPOSITORY: "${{ github.repository }}"
         GITHUB_RUN_ID: "${{ github.run_id }}"
         GITHUB_ACTOR: "${{ github.actor }}"
+        DISTRONAME: "${{ inputs.distroname }}"
+        ISO_PROFILES_REPO: "${{ inputs.iso_profiles_repo }}"
+        EDITION: "${{ inputs.edition }}"
+        MANJARO_BRANCH: "${{ inputs.manjaro_branch }}"
+        BIGLINUX_BRANCH: "${{ inputs.biglinux_branch }}"
+        BIGCOMMUNITY_BRANCH: "${{ inputs.community_branch }}"
+        KERNEL: "${{ inputs.kernel }}"
       run: |
         source /tmp/send_telegram_message.sh
         
@@ -356,19 +363,19 @@ runs:
       shell: bash
       env:
         GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+        DISTRONAME: "${{ inputs.distroname }}"
+        EDITION: "${{ inputs.edition }}"
       run: |
         source /tmp/send_telegram_message.sh
         
         current_time=$(date "+%Y-%m-%d %H:%M:%S")
         
-        MESSAGE="⏳ <b>[step 2/3] Preparing ISO for build</b>
-        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-        <b>Workflow:</b> <code>build-iso/action.yml</code>
-        <b>Start time:</b> <code>${current_time}</code>
-        <b>Distribution:</b> <code>${DISTRONAME}</code>
-        <b>Edition:</b> <code>${EDITION}</code>"
+        MESSAGE="⏳ <b>[step 2/3] Preparing ISO</b>
+        <b>Process:</b> <code>${DISTRONAME}-${EDITION}</code> 
+        <b>Time:</b> <code>${current_time}</code>"
         
         send_telegram_message "$MESSAGE" "HTML"
+
 
     - name: Build ISO
       id: build
@@ -415,70 +422,46 @@ runs:
         echo "ISO_PATH=$WORK_PATH/$ISO_BASENAME" >> $GITHUB_ENV
         msg_ok "ISO path set to: $WORK_PATH/$ISO_BASENAME"
 
-    - name: Send completion notification
+    - name: Process ISO file
       shell: bash
-      env:
-        GITHUB_RUN_NUMBER: "${{ github.run_number }}"
-        GITHUB_REPOSITORY: "${{ github.repository }}"
-        GITHUB_RUN_ID: "${{ github.run_id }}"
+      id: process-iso
       run: |
         source /tmp/send_telegram_message.sh
+        msg "Processing ISO file"
         
-        # Use the values calculated in edition.yml if available
-        duration_formatted="${{ env.duration_formatted }}"
-        iso_size="${{ env.iso_size }}"
-        artifact_url="${{ env.artifact_url }}"
-        FILE_NAME="${{ steps.prepare-iso.outputs.release_name }}"
+        # Set ISO path in environment
+        echo "ISO_PATH=${{ steps.build.outputs.iso_path }}" >> $GITHUB_ENV
         
-        # Fallbacks if variables aren't available
-        if [ -z "$duration_formatted" ]; then
-          # Calculate build duration
-          if [ -n "${{ inputs.start_timestamp }}" ]; then
-            start_timestamp=${{ inputs.start_timestamp }}
-          else
-            start_timestamp=$(($(date +%s) - 3600))
-          fi
-          
-          end_timestamp=$(date +%s)
-          duration=$((end_timestamp - start_timestamp))
-          hours=$((duration / 3600))
-          minutes=$(((duration % 3600) / 60))
-          seconds=$((duration % 60))
-          
-          # Format values
-          hours=$(printf "%02d" $hours)
-          minutes=$(printf "%02d" $minutes)
-          seconds=$(printf "%02d" $seconds)
-          
-          duration_formatted="${hours}h ${minutes}m ${seconds}s"
+        # Calculate MD5 hash
+        if [[ -f "${{ steps.build.outputs.iso_path }}" ]]; then
+          md5sum "${{ steps.build.outputs.iso_path }}" > "${{ steps.build.outputs.iso_path }}.md5"
+          msg_info "MD5 hash calculated and saved to ${{ steps.build.outputs.iso_path }}.md5"
+        else
+          die "Error: ISO file not found at ${{ steps.build.outputs.iso_path }}"
         fi
         
-        # Fallback for file size
-        if [ -z "$iso_size" ]; then
-          if [ -f "$ISO_PATH" ]; then
-            iso_size=$(du -h "$ISO_PATH" | cut -f1)
-          else
-            iso_size="unknown"
-          fi
-        fi
+        # Prepare ISO name
+        release=$(basename "${{ steps.build.outputs.iso_path }}" .iso)
+        echo "release_name=${release}" >> "$GITHUB_OUTPUT"
         
-        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+        msg_ok "ISO processing completed successfully"
+
+    - name: Prepare ISO for release
+      id: prepare-iso
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        msg "Preparing ISO for release"
         
-        # Build download link part if available
-        download_link=""
-        if [ -n "$artifact_url" ] && [ -n "$FILE_NAME" ]; then
-          download_link="<b>Download:</b> <a href='${artifact_url}'>${FILE_NAME}.zip</a>"
-        fi
+        # Compress ISO into parts
+        release=$(basename "$ISO_PATH" .iso)
+        7z a -v2000m ${release}.7z "$ISO_PATH"
+        echo "release_name=${release}" >> "$GITHUB_OUTPUT"
         
-        MESSAGE="✅ <b>[step 3/3] Job completed in:</b> <code>${duration_formatted}</code>
-        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-        <b>Workflow:</b> <code>build-iso/action.yml</code>
-        <b>End time:</b> <code>${END_TIME}</code>
-        <b>ISO Name:</b> <code>${ISO_BASENAME}</code>
-        <b>ISO Size:</b> <code>${iso_size}</code>
-        <b>Distribution:</b> <code>${DISTRONAME}</code>
-        <b>Edition:</b> <code>${EDITION}</code>
-        <b>Kernel:</b> <code>${KERNEL}</code>
-        ${download_link}"
+        # Debug output
+        msg_info "ISO_PATH (original): $ISO_PATH"
+        msg_info "ISO_PATH (md5): $ISO_PATH.md5"
+        msg_info "ISO_PATH (pkgs): $ISO_PATH.pkgs"
+        msg_info "Release name: ${release}"
         
-        send_telegram_message "$MESSAGE" "HTML"
+        msg_ok "ISO prepared for release successfully"
