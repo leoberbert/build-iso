@@ -602,7 +602,6 @@ cleanup_and_move_files() {
   replicate '#'
 }
 
-# Install required packages for build
 install_required_packages() {
   msg "Installing required packages"
   
@@ -611,17 +610,22 @@ install_required_packages() {
     cleaning_working_directories
   fi
   
-  # Install base tools
-  msg_info "Installing base development tools"
-  sudo pacman -Sy --quiet --needed --noconfirm git base-devel cdrkit &>/dev/null
-  
-  # Install Manjaro tools
-  msg_info "Installing Manjaro build tools"
-  sudo pacman -Sy --quiet --noconfirm \
-    manjaro-tools-iso-git \
+  # Install required packages that aren't in the Docker image
+  msg_info "Installing specialized build tools"
+  sudo pacman -Sy --quiet --needed --noconfirm \
+    archiso \
+    calamares \
+    calamares-tools \
+    cdrkit \
     manjaro-tools-base-git \
+    manjaro-tools-iso-git \
     manjaro-tools-pkg-git \
-    manjaro-tools-yaml-git &>/dev/null
+    manjaro-tools-yaml-git \
+    mkinitcpio \
+    mktorrent \
+    ncurses \
+    shfmt \
+    squashfs-tools
   
   if [[ $? -eq 0 ]]; then
     msg_ok "All packages installed successfully."

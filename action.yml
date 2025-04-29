@@ -232,6 +232,35 @@ runs:
         msg_run "ls -la /mnt || true"
         replicate '='
 
+    - name: Send start notification
+      shell: bash
+      env:
+        GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+        GITHUB_REPOSITORY: "${{ github.repository }}"
+        GITHUB_RUN_ID: "${{ github.run_id }}"
+        GITHUB_ACTOR: "${{ github.actor }}"
+      run: |
+        source /tmp/send_telegram_message.sh
+        
+        link_action="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        current_time=$(date "+%Y-%m-%d %H:%M:%S")
+        
+        MESSAGE="🚀 <b>[step 1/3] build-iso - STARTING WORKFLOW</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Job URL:</b> <a href='${link_action}'>${link_action}</a>
+        <b>Workflow:</b> <code>build-iso/action.yml</code>
+        <b>Started by:</b> <code>${GITHUB_ACTOR}</code>
+        <b>Start time:</b> <code>${current_time}</code>
+        <b>Distribution:</b> <code>${DISTRONAME}</code>
+        <b>ISO Profile:</b> <code>${ISO_PROFILES_REPO}</code>
+        <b>Edition:</b> <code>${EDITION}</code>
+        <b>Manjaro Branch:</b> <code>${MANJARO_BRANCH}</code>
+        <b>BigLinux Branch:</b> <code>${BIGLINUX_BRANCH}</code>
+        <b>Community Branch:</b> <code>${BIGCOMMUNITY_BRANCH}</code>
+        <b>Kernel:</b> <code>${KERNEL}</code>"
+        
+        send_telegram_message "$MESSAGE" "HTML"
+
     - name: Setup build environment
       shell: bash
       run: |
@@ -250,35 +279,6 @@ runs:
             echo
           } | sudo tee -a /etc/pacman.conf > /dev/null
         fi
-
-        # Install required packages
-        msg_info "Installing required packages"
-        sudo pacman -Sy --quiet --needed --noconfirm --overwrite \* \
-          manjaro-chrootbuild \
-          manjaro-tools-iso-git \
-          manjaro-tools-yaml-git \
-          manjaro-tools-base-git \
-          mktorrent \
-          squashfs-tools \
-          archiso \
-          calamares \
-          calamares-tools \
-          mkinitcpio \
-          shfmt \
-          cdrkit \
-          ncurses > /dev/null
-          
-        # # Configure disable-fsync for faster builds
-        # msg "Configuring disable-fsync"
-        # DISABLE_FSYNC_URL="https://raw.githubusercontent.com/biglinux/disable-fsync/main/disable-fsync/usr/lib/disable-fsync.so"
-        # DISABLE_FSYNC_FILE="/usr/lib/disable-fsync.so"
-        # PRELOAD_FILE="/etc/ld.so.preload"
-        
-        # sudo wget "$DISABLE_FSYNC_URL" -O "$DISABLE_FSYNC_FILE"
-        # SHA256SUM=$(curl -s "$DISABLE_FSYNC_URL" | sha256sum | awk '{print $1}')
-        # echo "${SHA256SUM} ${DISABLE_FSYNC_FILE}" | sha256sum --check || exit 1
-        # sudo sh -c "echo '${DISABLE_FSYNC_FILE}' >> '${PRELOAD_FILE}'"
-        # sudo ldconfig
         
         # Setup cryptographic keys
         msg "Setting up cryptographic keys"
@@ -352,6 +352,24 @@ runs:
           echo "OFFICE=${{ inputs.office-chooser }}"
         } >> "$GITHUB_ENV"
 
+    - name: Send preparation notification
+      shell: bash
+      env:
+        GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+      run: |
+        source /tmp/send_telegram_message.sh
+        
+        current_time=$(date "+%Y-%m-%d %H:%M:%S")
+        
+        MESSAGE="⏳ <b>[step 2/3] Preparing ISO for build</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Workflow:</b> <code>build-iso/action.yml</code>
+        <b>Start time:</b> <code>${current_time}</code>
+        <b>Distribution:</b> <code>${DISTRONAME}</code>
+        <b>Edition:</b> <code>${EDITION}</code>"
+        
+        send_telegram_message "$MESSAGE" "HTML"
+
     - name: Build ISO
       id: build
       shell: bash
@@ -364,8 +382,20 @@ runs:
         ./build-iso.sh --automatic
         
         # Check exit code
-        if [ $? -ne 0 ]; then
-          die "ISO build failed"
+        BUILD_EXIT_CODE=$?
+        if [ $BUILD_EXIT_CODE -ne 0 ]; then
+          # Send failure notification
+          link_action="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          
+          FAILURE_MESSAGE="🚨 <b>ISO BUILD FAILED:</b>
+          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Distribution:</b> <code>${DISTRONAME}</code>
+          <b>Edition:</b> <code>${EDITION}</code>
+          <b>Error URL:</b> <a href='${link_action}'>${link_action}</a>
+          <b>Exit Code:</b> <code>${BUILD_EXIT_CODE}</code>"
+          
+          send_telegram_message "$FAILURE_MESSAGE" "HTML"
+          die "ISO build failed with exit code ${BUILD_EXIT_CODE}"
         fi
         
         msg_ok "ISO build completed successfully"
@@ -384,3 +414,71 @@ runs:
         msg "Setting ISO path for output"
         echo "ISO_PATH=$WORK_PATH/$ISO_BASENAME" >> $GITHUB_ENV
         msg_ok "ISO path set to: $WORK_PATH/$ISO_BASENAME"
+
+    - name: Send completion notification
+      shell: bash
+      env:
+        GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+        GITHUB_REPOSITORY: "${{ github.repository }}"
+        GITHUB_RUN_ID: "${{ github.run_id }}"
+      run: |
+        source /tmp/send_telegram_message.sh
+        
+        # Use the values calculated in edition.yml if available
+        duration_formatted="${{ env.duration_formatted }}"
+        iso_size="${{ env.iso_size }}"
+        artifact_url="${{ env.artifact_url }}"
+        FILE_NAME="${{ steps.prepare-iso.outputs.release_name }}"
+        
+        # Fallbacks if variables aren't available
+        if [ -z "$duration_formatted" ]; then
+          # Calculate build duration
+          if [ -n "${{ inputs.start_timestamp }}" ]; then
+            start_timestamp=${{ inputs.start_timestamp }}
+          else
+            start_timestamp=$(($(date +%s) - 3600))
+          fi
+          
+          end_timestamp=$(date +%s)
+          duration=$((end_timestamp - start_timestamp))
+          hours=$((duration / 3600))
+          minutes=$(((duration % 3600) / 60))
+          seconds=$((duration % 60))
+          
+          # Format values
+          hours=$(printf "%02d" $hours)
+          minutes=$(printf "%02d" $minutes)
+          seconds=$(printf "%02d" $seconds)
+          
+          duration_formatted="${hours}h ${minutes}m ${seconds}s"
+        fi
+        
+        # Fallback for file size
+        if [ -z "$iso_size" ]; then
+          if [ -f "$ISO_PATH" ]; then
+            iso_size=$(du -h "$ISO_PATH" | cut -f1)
+          else
+            iso_size="unknown"
+          fi
+        fi
+        
+        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+        
+        # Build download link part if available
+        download_link=""
+        if [ -n "$artifact_url" ] && [ -n "$FILE_NAME" ]; then
+          download_link="<b>Download:</b> <a href='${artifact_url}'>${FILE_NAME}.zip</a>"
+        fi
+        
+        MESSAGE="✅ <b>[step 3/3] Job completed in:</b> <code>${duration_formatted}</code>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Workflow:</b> <code>build-iso/action.yml</code>
+        <b>End time:</b> <code>${END_TIME}</code>
+        <b>ISO Name:</b> <code>${ISO_BASENAME}</code>
+        <b>ISO Size:</b> <code>${iso_size}</code>
+        <b>Distribution:</b> <code>${DISTRONAME}</code>
+        <b>Edition:</b> <code>${EDITION}</code>
+        <b>Kernel:</b> <code>${KERNEL}</code>
+        ${download_link}"
+        
+        send_telegram_message "$MESSAGE" "HTML"
