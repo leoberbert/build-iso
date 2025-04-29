@@ -142,7 +142,7 @@ jobs:
           <b>Manjaro Branch:</b> <code>${iso_manjaro_branch}</code>
           <b>BigLinux Branch:</b> <code>${iso_biglinux_branch}</code>
           <b>BigCommunity Branch:</b> <code>${iso_bigcommunity_branch}</code>
-          <b>Kernel:</b> <code>${iso_kernel}</code>
+          <b>Kernel:</b> <code>${iso_kernel}</code>"
 
           # Send original message with HTML to Telegram
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
