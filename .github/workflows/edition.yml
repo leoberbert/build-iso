@@ -101,34 +101,6 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: Define telegram functions
-        id: telegram-functions
-        shell: bash
-        run: |
-          # Color definitions for terminal output
-          green="\e[1;32m"     # Bold green for success
-          reset="\e[0m"        # Reset text formatting
-          
-          # Define telegram message function
-          send_telegram_message() {
-            local message="$1"
-            local parse_mode="$2"
-            
-            # Set parse_mode as "HTML" if not specified
-            [[ -z $parse_mode ]] && parse_mode="HTML"
-            
-            # Remove HTML tags and display result in terminal
-            echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
-            
-            # Send original message with HTML to Telegram
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-              -d chat_id="${CHAT_ID}" \
-              -d text="${message}" \
-              -d parse_mode="${parse_mode}"
-          }
-          
-          # Export the function for use in subsequent steps
-          export -f send_telegram_message
       - name: Capture start time
         id: start-time
         shell: bash
@@ -173,7 +145,11 @@ jobs:
           <b>Kernel:</b> <code>${iso_kernel}</code>
           <b>ISO Name:</b> <code>${iso_distroname}_${ISO_BRANCH^^}_${iso_edition}_$(date '+%Y-%m-%d')</code>"
 
-          send_telegram_message "${MESSAGE}"
+          # Send original message with HTML to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="HTML"
 
       - name: Upload shared file artifact
         uses: actions/upload-artifact@v4
@@ -194,6 +170,35 @@ jobs:
         - /mnt/lfs:/mnt/lfs
 
     steps:
+      - name: Define telegram functions
+        shell: bash
+        run: |
+          # Create telegram functions script
+          cat << 'EOF' > /tmp/telegram_functions.sh
+          # Color definitions for terminal output
+          green="\e[1;32m"     # Bold green for success
+          reset="\e[0m"        # Reset text formatting
+          
+          # Define telegram message function
+          send_telegram_message() {
+            local message="$1"
+            local parse_mode="$2"
+            
+            # Set parse_mode as "HTML" if not specified
+            [[ -z $parse_mode ]] && parse_mode="HTML"
+            
+            # Remove HTML tags and display result in terminal
+            echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+            
+            # Send original message with HTML to Telegram
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -d chat_id="${CHAT_ID}" \
+              -d text="${message}" \
+              -d parse_mode="${parse_mode}"
+          }
+          export -f send_telegram_message
+          EOF
+
       - name: Download shared artifact
         uses: actions/download-artifact@v4
         with:
@@ -270,14 +275,15 @@ jobs:
         id: prepare-iso
         shell: bash
         run: |
+          source /tmp/telegram_functions.sh
           # Send progress notification
           current_time=$(date "+%Y-%m-%d %H:%M:%S")
     
-          MESSAGE="⏳ <b>[step 2/3] Preparing ISO</b>
+          message="⏳ <b>[step 2/3] Preparing ISO</b>
           <b>Process:</b> <code>${DISTRONAME}-${EDITION}</code> 
           <b>Time:</b> <code>${current_time}</code>"
 
-          send_telegram_message "${MESSAGE}"
+          send_telegram_message "${message}"
 
           # Compress ISO into parts
           release=$(basename "${ISO_PATH}" .iso)
@@ -338,6 +344,7 @@ jobs:
       - name: Send completion notification
         shell: bash
         run: |
+          source /tmp/telegram_functions.sh
           # Calculate duration
           END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
           END_TIMESTAMP=$(date +%s)
@@ -350,7 +357,7 @@ jobs:
           iso_size=$(numfmt --to=iec --suffix=B "${artifact_size_in_bytes}")
           
           # Send completion notification
-          MESSAGE="✅ <b>[step 3/3] Job completed in:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
+          message="✅ <b>[step 3/3] Job completed in:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Workflow:</b> <code>build-iso/edition.yml</code>
           <b>Start time:</b> <code>${START_TIME}</code>
@@ -359,17 +366,18 @@ jobs:
           <b>ISO Size:</b> <code>${iso_size}</code>
           <b>Download:</b> <a href='${{ env.artifact_url }}'>${FILE_NAME}.zip</a>"
 
-          send_telegram_message "${MESSAGE}"
+          send_telegram_message "${message}"
 
       - name: Telegram alert on failure
         if: failure()
         shell: bash
         run: |
+          source /tmp/telegram_functions.sh
           link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          MESSAGE="🚨 <b>ISO BUILD FAILED:</b>
+          message="🚨 <b>ISO BUILD FAILED:</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>ISO:</b> <code>${{ github.event.action }}</code>
           <b>Error URL:</b> <a href='${link_action}'>${link_action}</a>"
 
-          send_telegram_message "${MESSAGE}"
+          send_telegram_message "${message}"
