@@ -199,6 +199,39 @@ jobs:
           start_time: "${{ env.START_TIME }}"
           start_timestamp: "${{ env.START_TIMESTAMP }}"
 
+      - name: Set ISO path
+        shell: bash
+        run: |
+          echo "ISO_PATH=${{ steps.build.outputs.iso_path }}" >> $GITHUB_ENV
+
+      - name: Calculate ISO MD5 hash
+        shell: bash
+        run: |
+          if [[ -f "${ISO_PATH}" ]]; then
+            md5sum "${ISO_PATH}" > "${ISO_PATH}.md5"
+            echo "MD5 hash calculated and saved:"
+            cat "${ISO_PATH}.md5"
+          else
+            echo "Error: ISO file not found at ${ISO_PATH}"
+            exit 1
+          fi
+
+      - name: Prepare ISO for release
+        id: prepare-iso
+        shell: bash
+        run: |
+          # Compress ISO into parts
+          echo "Preparing ISO for release"
+          release=$(basename "${ISO_PATH}" .iso)
+          7z a -v2000m ${release}.7z "${ISO_PATH}"
+          echo "release_name=${release}" >> "$GITHUB_OUTPUT"
+          
+          # Debug output
+          echo "ISO_PATH (original): ${ISO_PATH}"
+          echo "ISO_PATH (md5): ${ISO_PATH}.md5"
+          echo "ISO_PATH (pkgs): ${ISO_PATH}.pkgs"
+          echo "Release name: ${release}"
+
       - name: Upload ISO as artifact
         uses: actions/upload-artifact@v4
         with:
