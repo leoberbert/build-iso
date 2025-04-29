@@ -1,7 +1,6 @@
 # BigCommunity ISO Builder
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/big-comm/artwork/main/logos/bigcommunity.svg" width="200" alt="BigCommunity Logo">
   <h3>Automated Build System for BigCommunity and BigLinux ISO Images</h3>
 </div>
 
