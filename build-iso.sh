@@ -369,12 +369,12 @@ configure_kernel() {
   
   # Get appropriate kernel version
   case "$KERNEL" in
-    oldLts)
+    oldlts)
       KERNEL=$(curl -s https://www.kernel.org/feeds/kdist.xml | 
-              grep ": longterm" | 
-              sed -n 's/.*<title>\(.*\): longterm<\/title>.*/\1/p' | 
-              rev | cut -d "." -f2,3 | rev | 
-              sed 's/\.//g' | tail -n1)
+          grep ": longterm" | 
+          sed -n 's/.*<title>\(.*\): longterm<\/title>.*/\1/p' | 
+          rev | cut -d "." -f2,3 | rev | 
+          sed 's/\.//g' | sed -n '2p')
       ;;
     lts)
       KERNEL=$(curl -s https://www.kernel.org/feeds/kdist.xml | 
