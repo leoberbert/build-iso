@@ -257,10 +257,10 @@ setup_manjaro_tools() {
   find "$WORK_PATH_ISO_PROFILES" -name "kernels.cfg" -exec sudo sed -i "s/misobasedir=[^ ]*/misobasedir=${DISTRONAME,,}/g" {} + || true
   find "$WORK_PATH_ISO_PROFILES" -name "kernels.cfg" -exec sudo sed -i "s/misolabel=[^ ]*/misolabel=${VOL_ID}/g" {} + || true
   
-  # # Adjust configuration in grub-fix.sh files
-  # msg_info "Adjusting grub-fix.sh files"
-  # find "$WORK_PATH_ISO_PROFILES" -name "grub-fix.sh" -exec sudo sed -i "s|misobasedir=[^ ]* misolabel=[^ ]*|misobasedir=${DISTRONAME,,} misolabel=${VOL_ID}|g" {} + || true
-  
+  # Adjust configuration in grub-fix.sh files
+   msg_info "Adjusting grub-fix.sh files"
+   find "$WORK_PATH_ISO_PROFILES" -name "grub-fix.sh" -exec sudo sed -i "s|misobasedir=[^ ]* misolabel=[^ ]*|misobasedir=${DISTRONAME,,} misolabel=${VOL_ID}|g" {} + || true
+
   # Update theme paths
   msg_info "Adjusting theme paths"
   find "$WORK_PATH_ISO_PROFILES" -name "variable.cfg" -exec sudo sed -i \
