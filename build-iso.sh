@@ -374,7 +374,7 @@ patch_manjaro_tools() {
         msg2 "Configuring lsb-release: respecting community-release package"\
         # If community-release is installed, preserve its values\
         if grep -q "community-release" "$1/var/lib/pacman/local/"*"/files" 2>/dev/null; then\
-            msg3 "community-release package detected, preserving its values"\
+            msg2 "community-release package detected, preserving its values"\
         else\
             sed -i -e "s/^.*DISTRIB_RELEASE.*/DISTRIB_RELEASE=\\"${dist_release}\\"/" "$1/etc/lsb-release"\
             sed -i -e "s/^.*DISTRIB_CODENAME.*/DISTRIB_CODENAME=\\"${dist_codename}\\"/" "$1/etc/lsb-release"\
