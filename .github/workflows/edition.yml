@@ -126,17 +126,7 @@ jobs:
           esac
           echo "ISO_BRANCH='$iso_branch'" >> $GITHUB_ENV
           echo "ISO_BRANCH='$iso_branch'" >> shared_file.txt
-
-      - name: Debug variables
-        shell: bash
-        run: |
-          echo "=== DEBUG VARIABLES ==="
-          echo "iso_distroname: ${{ env.iso_distroname }}"
-          echo "iso_manjaro_branch: ${{ env.iso_manjaro_branch }}"
-          echo "iso_biglinux_branch: ${{ env.iso_biglinux_branch }}"
-          echo "iso_bigcommunity_branch: ${{ env.iso_bigcommunity_branch }}"
-          echo "========================"
-
+      
       - name: Determine ISO type
         id: determine-iso-type
         shell: bash
@@ -147,101 +137,85 @@ jobs:
           BIGLINUX_BRANCH="${{ env.iso_biglinux_branch }}"
           BIGCOMMUNITY_BRANCH="${{ env.iso_bigcommunity_branch }}"
           
-          echo "=== DETERMINE ISO TYPE DEBUG ==="
-          echo "DISTRO: $DISTRO"
-          echo "MANJARO_BRANCH: $MANJARO_BRANCH"
-          echo "BIGLINUX_BRANCH: $BIGLINUX_BRANCH"
-          echo "BIGCOMMUNITY_BRANCH: $BIGCOMMUNITY_BRANCH"
+          echo "DEBUG: DISTRO=$DISTRO"
+          echo "DEBUG: MANJARO_BRANCH=$MANJARO_BRANCH"  
+          echo "DEBUG: BIGLINUX_BRANCH=$BIGLINUX_BRANCH"
+          echo "DEBUG: BIGCOMMUNITY_BRANCH=$BIGCOMMUNITY_BRANCH"
+          echo "DEBUG: Checking case: $MANJARO_BRANCH/$BIGCOMMUNITY_BRANCH"
           
           # Determine ISO type based on branches (same logic as build-iso.sh)
           case "$DISTRO" in
             bigcommunity)
+              echo "DEBUG: Entered bigcommunity case"
               case "$MANJARO_BRANCH/$BIGCOMMUNITY_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
+                stable/stable) 
+                  echo "DEBUG: Matched stable/stable"
+                  ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) 
+                  echo "DEBUG: Matched stable/testing or testing/*"
+                  ISO_TYPE="BETA" ;;
+                unstable/*) 
+                  echo "DEBUG: Matched unstable/*"
+                  ISO_TYPE="DEVELOPMENT" ;;
+                *) 
+                  echo "DEBUG: Matched default case for bigcommunity"
+                  ISO_TYPE="BETA" ;;
               esac
               ;;
             biglinux)
+              echo "DEBUG: Entered biglinux case"
               case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
+                stable/stable) 
+                  echo "DEBUG: Matched stable/stable"
+                  ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) 
+                  echo "DEBUG: Matched stable/testing or testing/*"
+                  ISO_TYPE="BETA" ;;
+                unstable/*) 
+                  echo "DEBUG: Matched unstable/*"
+                  ISO_TYPE="DEVELOPMENT" ;;
+                *) 
+                  echo "DEBUG: Matched default case for biglinux"
+                  ISO_TYPE="BETA" ;;
               esac
               ;;
             manjaro)
+              echo "DEBUG: Entered manjaro case"
               case "$MANJARO_BRANCH" in
-                stable) ISO_TYPE="STABLE" ;;
-                testing) ISO_TYPE="BETA" ;;
-                unstable) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
+                stable) 
+                  echo "DEBUG: Matched stable"
+                  ISO_TYPE="STABLE" ;;
+                testing) 
+                  echo "DEBUG: Matched testing"
+                  ISO_TYPE="BETA" ;;
+                unstable) 
+                  echo "DEBUG: Matched unstable"
+                  ISO_TYPE="DEVELOPMENT" ;;
+                *) 
+                  echo "DEBUG: Matched default case for manjaro"
+                  ISO_TYPE="BETA" ;;
               esac
               ;;
             *)
+              echo "DEBUG: Entered default distro case"
               case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
+                stable/stable) 
+                  echo "DEBUG: Matched stable/stable"
+                  ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) 
+                  echo "DEBUG: Matched stable/testing or testing/*"
+                  ISO_TYPE="BETA" ;;
+                unstable/*) 
+                  echo "DEBUG: Matched unstable/*"
+                  ISO_TYPE="DEVELOPMENT" ;;
+                *) 
+                  echo "DEBUG: Matched default case for default distro"
+                  ISO_TYPE="BETA" ;;
               esac
               ;;
           esac
           
-          echo "FINAL ISO_TYPE: $ISO_TYPE"
-          echo "================================"
-          
-          echo "ISO_TYPE=$ISO_TYPE" >> $GITHUB_ENV
-          echo "iso_type=$ISO_TYPE" >> $GITHUB_OUTPUT
-          echo "Determined ISO type: $ISO_TYPE"
-
-      - name: Determine ISO type
-        id: determine-iso-type
-        shell: bash
-        run: |
-          # Use environment variables with proper GitHub syntax
-          DISTRO="${{ env.iso_distroname }}"
-          MANJARO_BRANCH="${{ env.iso_manjaro_branch }}"
-          BIGLINUX_BRANCH="${{ env.iso_biglinux_branch }}"
-          BIGCOMMUNITY_BRANCH="${{ env.iso_bigcommunity_branch }}"
-          
-          # Determine ISO type based on branches (same logic as build-iso.sh)
-          case "$DISTRO" in
-            bigcommunity)
-              case "$MANJARO_BRANCH/$BIGCOMMUNITY_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
-              esac
-              ;;
-            biglinux)
-              case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
-              esac
-              ;;
-            manjaro)
-              case "$MANJARO_BRANCH" in
-                stable) ISO_TYPE="STABLE" ;;
-                testing) ISO_TYPE="BETA" ;;
-                unstable) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
-              esac
-              ;;
-            *)
-              case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
-                stable/stable) ISO_TYPE="STABLE" ;;
-                stable/testing | testing/*) ISO_TYPE="BETA" ;;
-                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
-                *) ISO_TYPE="BETA" ;;
-              esac
-              ;;
-          esac
-          
+          echo "DEBUG: FINAL ISO_TYPE=$ISO_TYPE"
           echo "ISO_TYPE=$ISO_TYPE" >> $GITHUB_ENV
           echo "iso_type=$ISO_TYPE" >> $GITHUB_OUTPUT
           echo "Determined ISO type: $ISO_TYPE"
