@@ -131,10 +131,16 @@ jobs:
         id: determine-iso-type
         shell: bash
         run: |
+          # Use environment variables with proper GitHub syntax
+          DISTRO="${{ env.iso_distroname }}"
+          MANJARO_BRANCH="${{ env.iso_manjaro_branch }}"
+          BIGLINUX_BRANCH="${{ env.iso_biglinux_branch }}"
+          BIGCOMMUNITY_BRANCH="${{ env.iso_bigcommunity_branch }}"
+          
           # Determine ISO type based on branches (same logic as build-iso.sh)
-          case "$iso_distroname" in
+          case "$DISTRO" in
             bigcommunity)
-              case "$iso_manjaro_branch/$iso_bigcommunity_branch" in
+              case "$MANJARO_BRANCH/$BIGCOMMUNITY_BRANCH" in
                 stable/stable) ISO_TYPE="STABLE" ;;
                 stable/testing | testing/*) ISO_TYPE="BETA" ;;
                 unstable/*) ISO_TYPE="DEVELOPMENT" ;;
@@ -142,7 +148,7 @@ jobs:
               esac
               ;;
             biglinux)
-              case "$iso_manjaro_branch/$iso_biglinux_branch" in
+              case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
                 stable/stable) ISO_TYPE="STABLE" ;;
                 stable/testing | testing/*) ISO_TYPE="BETA" ;;
                 unstable/*) ISO_TYPE="DEVELOPMENT" ;;
@@ -150,7 +156,7 @@ jobs:
               esac
               ;;
             manjaro)
-              case "$iso_manjaro_branch" in
+              case "$MANJARO_BRANCH" in
                 stable) ISO_TYPE="STABLE" ;;
                 testing) ISO_TYPE="BETA" ;;
                 unstable) ISO_TYPE="DEVELOPMENT" ;;
@@ -158,7 +164,7 @@ jobs:
               esac
               ;;
             *)
-              case "$iso_manjaro_branch/$iso_biglinux_branch" in
+              case "$MANJARO_BRANCH/$BIGLINUX_BRANCH" in
                 stable/stable) ISO_TYPE="STABLE" ;;
                 stable/testing | testing/*) ISO_TYPE="BETA" ;;
                 unstable/*) ISO_TYPE="DEVELOPMENT" ;;
