@@ -100,6 +100,8 @@ env:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    outputs:
+      iso_type: ${{ steps.determine-iso-type.outputs.iso_type }}
     steps:
       - name: Capture start time
         id: start-time
@@ -124,6 +126,50 @@ jobs:
           esac
           echo "ISO_BRANCH='$iso_branch'" >> $GITHUB_ENV
           echo "ISO_BRANCH='$iso_branch'" >> shared_file.txt
+
+      - name: Determine ISO type
+        id: determine-iso-type
+        shell: bash
+        run: |
+          # Determine ISO type based on branches (same logic as build-iso.sh)
+          case "$iso_distroname" in
+            bigcommunity)
+              case "$iso_manjaro_branch/$iso_bigcommunity_branch" in
+                stable/stable) ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) ISO_TYPE="BETA" ;;
+                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
+                *) ISO_TYPE="BETA" ;;
+              esac
+              ;;
+            biglinux)
+              case "$iso_manjaro_branch/$iso_biglinux_branch" in
+                stable/stable) ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) ISO_TYPE="BETA" ;;
+                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
+                *) ISO_TYPE="BETA" ;;
+              esac
+              ;;
+            manjaro)
+              case "$iso_manjaro_branch" in
+                stable) ISO_TYPE="STABLE" ;;
+                testing) ISO_TYPE="BETA" ;;
+                unstable) ISO_TYPE="DEVELOPMENT" ;;
+                *) ISO_TYPE="BETA" ;;
+              esac
+              ;;
+            *)
+              case "$iso_manjaro_branch/$iso_biglinux_branch" in
+                stable/stable) ISO_TYPE="STABLE" ;;
+                stable/testing | testing/*) ISO_TYPE="BETA" ;;
+                unstable/*) ISO_TYPE="DEVELOPMENT" ;;
+                *) ISO_TYPE="BETA" ;;
+              esac
+              ;;
+          esac
+          
+          echo "ISO_TYPE=$ISO_TYPE" >> $GITHUB_ENV
+          echo "iso_type=$ISO_TYPE" >> $GITHUB_OUTPUT
+          echo "Determined ISO type: $ISO_TYPE"
 
       - name: Send Telegram notification - Start
         shell: bash
@@ -157,7 +203,7 @@ jobs:
           path: shared_file.txt
 
   build:
-    name: Build ISO ${{ github.event.client_payload.distroname || inputs.distroname }} ${{ github.event.client_payload.edition || inputs.edition }}
+    name: Build ISO ${{ needs.setup.outputs.iso_type }} ${{ github.event.client_payload.distroname || inputs.distroname }} ${{ github.event.client_payload.edition || inputs.edition }}
     runs-on: ubuntu-latest
     needs: [setup]
     container:
