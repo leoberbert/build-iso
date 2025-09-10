@@ -357,8 +357,33 @@ process_remove_files() {
 add_cleanups() {
   local cleanup_script="/usr/lib/manjaro-tools/util-iso-image.sh"
   
-  # Add cleanup function call
-  sudo sed -i '/^}/i \ \ mkiso_build_iso_cleanups "$1"' "$cleanup_script"
+  # Verify target file exists and create backup
+  if [[ ! -f "$cleanup_script" ]]; then
+    msg_warning "Target script not found: $cleanup_script"
+    return 1
+  fi
+  
+  # Create backup
+  sudo cp "$cleanup_script" "${cleanup_script}.backup"
+  
+  # Use specific pattern that only exists in the target file
+  if ! sudo grep -q "prepare_initramfs_img()" "$cleanup_script"; then
+    msg_warning "Expected pattern not found in $cleanup_script"
+    return 1
+  fi
+  
+  # Add cleanup function call with specific pattern
+  sudo sed -i '/^prepare_initramfs_img()/i \ \ mkiso_build_iso_cleanups "$1"' "$cleanup_script"
+  
+  # Verify the modification was applied correctly
+  if sudo grep -q "mkiso_build_iso_cleanups" "$cleanup_script"; then
+    msg_info "Cleanup function successfully added to $cleanup_script"
+  else
+    msg_warning "Failed to add cleanup function to $cleanup_script"
+    # Restore backup on failure
+    sudo mv "${cleanup_script}.backup" "$cleanup_script"
+    return 1
+  fi
   
   # Add cleanup function
   sudo tee -a "$cleanup_script" >/dev/null <<-'EOF_CLEANUPS'
